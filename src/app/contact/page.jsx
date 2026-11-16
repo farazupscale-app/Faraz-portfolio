@@ -34,7 +34,8 @@ export default function ContactPage() {
   });
 
   const [errors, setErrors] = useState({});
-  const [status, setStatus] = useState('idle'); // 'idle' | 'success' | 'error'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'submitting' | 'success' | 'error'
+  const [serverError, setServerError] = useState('');
   const [copied, setCopied] = useState(false);
 
   const validate = () => {
@@ -62,10 +63,14 @@ export default function ContactPage() {
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
+    if (serverError) {
+      setServerError('');
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setServerError('');
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -74,17 +79,37 @@ export default function ContactPage() {
     }
 
     setErrors({});
-    setStatus('success');
+    setStatus('submitting');
 
     try {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#171717', '#B9F36A', '#ffffff'],
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
       });
-    } catch {
-      // ignore
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit inquiry.');
+      }
+
+      setStatus('success');
+
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#171717', '#B9F36A', '#ffffff'],
+        });
+      } catch {
+        // ignore
+      }
+    } catch (err) {
+      console.error('Submission error:', err);
+      setServerError(err.message || 'Something went wrong while sending to Google Sheets. Please try again.');
+      setStatus('error');
     }
   };
 
@@ -245,37 +270,44 @@ export default function ContactPage() {
                     <CheckCircle2 className="w-7 h-7" />
                   </div>
                   <h4 className="font-heading font-bold text-2xl text-[#171717]">
-                    Inquiry Form Validated!
+                    Inquiry Sent Successfully!
                   </h4>
                   <p className="text-xs sm:text-sm text-[#777777] max-w-md mx-auto leading-relaxed">
-                    Thank you, <strong>{formData.name}</strong>. Your message is prepared. To send it immediately via your preferred mail client, click the button below:
+                    Thank you, <strong>{formData.name}</strong>. Your message has been saved to my Google Sheet log and I will respond to <strong>{formData.email}</strong> shortly.
                   </p>
                   <div className="pt-2 flex flex-wrap justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatus('idle');
+                        setServerError('');
+                        setFormData({ name: '', email: '', subject: '', message: '' });
+                      }}
+                      className="px-7 py-3.5 clay-btn-dark text-[#FFFFFF] text-xs font-bold uppercase rounded-xl transition-all cursor-pointer"
+                    >
+                      Send Another Message
+                    </button>
                     <a
                       href={`mailto:${personal.email}?subject=${encodeURIComponent(
                         formData.subject
                       )}&body=${encodeURIComponent(
                         `Hi Faraz,\n\nFrom: ${formData.name} (${formData.email})\n\n${formData.message}`
                       )}`}
-                      className="inline-flex items-center gap-2 px-7 py-3.5 clay-btn-dark text-[#FFFFFF] text-xs font-bold uppercase rounded-xl transition-all"
+                      className="inline-flex items-center gap-2 px-6 py-3.5 clay-btn-white text-[#171717] text-xs font-bold uppercase rounded-xl transition-all"
                     >
                       <Mail className="w-4 h-4" />
-                      <span>Launch Email Client</span>
+                      <span>Also Open Email App</span>
                     </a>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStatus('idle');
-                        setFormData({ name: '', email: '', subject: '', message: '' });
-                      }}
-                      className="px-6 py-3.5 clay-btn-white text-[#171717] text-xs font-bold uppercase rounded-xl transition-all cursor-pointer"
-                    >
-                      Reset Form
-                    </button>
                   </div>
                 </motion.div>
               ) : (
                 <form onSubmit={handleSubmit} noValidate className="space-y-4">
+                  {serverError && (
+                    <div className="p-3.5 bg-red-100/90 border border-red-300 rounded-xl text-red-700 text-xs sm:text-sm flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                      <span>{serverError}</span>
+                    </div>
+                  )}
                   {/* Name & Email Row */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -371,12 +403,22 @@ export default function ContactPage() {
 
                   {/* Submit button with Tactile Dark Clay */}
                   <motion.button
-                    whileTap={{ scale: 0.98 }}
+                    whileTap={{ scale: status === 'submitting' ? 1 : 0.98 }}
                     type="submit"
-                    className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 clay-btn-dark text-[#FFFFFF] text-xs sm:text-sm font-bold uppercase tracking-wider rounded-xl focus:outline-hidden cursor-pointer"
+                    disabled={status === 'submitting'}
+                    className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 clay-btn-dark text-[#FFFFFF] text-xs sm:text-sm font-bold uppercase tracking-wider rounded-xl focus:outline-hidden cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    <Send className="w-4 h-4" />
-                    <span>SEND MESSAGE</span>
+                    {status === 'submitting' ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>RECORDING TO GOOGLE SHEET...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>SEND MESSAGE</span>
+                      </>
+                    )}
                   </motion.button>
                 </form>
               )}

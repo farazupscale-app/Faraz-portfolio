@@ -23,7 +23,11 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+.env
 .env*.local
+*.zip
+faraz-khan-portfolio-github/
+faraz-khan-portfolio-updated/
 
 # vercel
 .vercel
@@ -35,4 +39,3 @@ next-env.d.ts
 # scratch & submodules
 /scratch/
 /swarm-extension-repo/
-*.mp4
