@@ -2365,18 +2365,19 @@ const KEY = "__swarmRebuild";
         }
       }
 
-      // Constrain strictly to visible viewport: agents only build the section currently on screen!
+      // Agents build the active viewport. The tour now advances continuously,
+      // so every part of a long section enters this window instead of being
+      // skipped by a section-to-section jump.
       const topVisible = this.viewTop - 50;
       const botVisible = this.viewBot + 40;
-      const isVisibleOnScreen = (t) => {
-        if (t.layer !== "world") return true; // Sticky navbar items are always visible
+      const isInBuildWindow = (t) => {
+        if (t.layer !== "world") return true;
         return t.y >= topVisible - 100 && t.y <= botVisible;
       };
 
-      // Pass 1: Standard tier matching and completed dependencies within the visible section
       for (const t of this.tasks) {
         if (t.state !== "wait") continue;
-        if (!isVisibleOnScreen(t)) continue;
+        if (!isInBuildWindow(t)) continue;
         const tr = t.tier != null ? t.tier : 99;
         if (tr > minTier + 1) continue;
         let ok = true;
@@ -2389,11 +2390,10 @@ const KEY = "__swarmRebuild";
         if (ok) out.push(t);
       }
 
-      // Pass 2: Visible in-viewport tasks whose dependencies are done
       if (out.length === 0) {
         for (const t of this.tasks) {
           if (t.state !== "wait") continue;
-          if (!isVisibleOnScreen(t)) continue;
+          if (!isInBuildWindow(t)) continue;
           let ok = true;
           for (const d of t.deps) {
             if (d.state !== "done") {
@@ -2405,15 +2405,14 @@ const KEY = "__swarmRebuild";
         }
       }
 
-      // Pass 3: Visible in-viewport tasks ready to build
+      // Last-resort deadlock breaker for captured responsive layouts.
       if (out.length === 0) {
         for (const t of this.tasks) {
           if (t.state !== "wait") continue;
-          if (!isVisibleOnScreen(t)) continue;
+          if (!isInBuildWindow(t)) continue;
           out.push(t);
         }
       }
-
       return out;
     }
 
@@ -3633,12 +3632,6 @@ const KEY = "__swarmRebuild";
       this.speedIx = options.speed ? Math.max(0, Math.min(2, options.speed - 1)) : 0;
       this.complete = false;
       this.timing = {};
-      this.sectionTargets = null;
-      this.currentSectionIdx = 0;
-      this.sectionState = 'BUILDING';
-      this.sectionTimer = 0;
-      this.sectionDwell = 0;
-      this.scrollDuration = 1.8;
     }
 
     async loadShot() {
@@ -3782,7 +3775,6 @@ const KEY = "__swarmRebuild";
           b.classList.toggle("on", this.tour);
           b.textContent = this.tour ? "Touring" : "Tour";
           if (this.tour) {
-            this.sectionTargets = null;
             this.engine.start();
           }
         } else if (a === "sound") {
@@ -3837,118 +3829,25 @@ const KEY = "__swarmRebuild";
       this.raf = requestAnimationFrame((t) => this.frame(t));
     }
 
-    getSectionTargets() {
-      const g = this.env.geom();
-      const maxY = Math.max(0, this.env.scrollHeight() - g.vh);
-      const sectionIds = ['hero', 'marquee', 'about', 'stack', 'services', 'work', 'process', 'faq', 'contact', 'footer'];
-      const targets = [0];
-      for (const id of sectionIds) {
-        const el = document.getElementById(id);
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          const targetY = Math.min(maxY, Math.max(0, Math.round(g.sy + rect.top)));
-          if (!targets.some((t) => Math.abs(t - targetY) < 140)) {
-            targets.push(targetY);
-          }
-        }
-      }
-      targets.sort((a, b) => a - b);
-      if (targets[targets.length - 1] < maxY - 60) {
-        targets.push(maxY);
-      }
-      return targets;
-    }
-
     tourStep(dt) {
       const E = this.engine;
       if (!E.started) return;
       const g = this.env.geom();
-      const maxY = Math.max(0, this.env.scrollHeight() - g.vh);
-      const spd = Math.max(0.5, E.speed || 1);
-
-      if (!this.sectionTargets) {
-        this.sectionTargets = this.getSectionTargets();
-        let closestIdx = 0;
-        let closestDist = Infinity;
-        for (let i = 0; i < this.sectionTargets.length; i++) {
-          const dist = Math.abs(this.sectionTargets[i] - g.sy);
-          if (dist < closestDist) {
-            closestDist = dist;
-            closestIdx = i;
-          }
-        }
-        this.currentSectionIdx = closestIdx;
-        this.sectionState = 'BUILDING';
-        this.sectionTimer = 0;
-        this.sectionDwell = 0;
-        this.scrollDuration = 1.8;
+      const maxY = this.env.scrollHeight() - g.vh;
+      if (g.sy >= maxY - 1) {
+        this.tourV = 0;
+        return;
       }
 
-      if (this.sectionState === 'BUILDING') {
-        const targetY = this.sectionTargets[this.currentSectionIdx] || 0;
-        // Hold scroll steadily on current section while agents build it
-        if (Math.abs(g.sy - targetY) > 3 && this.sectionTimer < 0.25) {
-          this.env.scrollTo(targetY);
-        }
-
-        this.sectionTimer += dt;
-
-        // Tasks within the current screen window
-        const vTop = g.sy - 40;
-        const vBot = g.sy + g.vh + 40;
-        const visibleTasks = E.tasks.filter((t) => (t.layer === "world" ? t.y >= vTop && t.y <= vBot : true));
-        const pending = visibleTasks.filter((t) => t.state === "wait" || t.state === "active").length;
-        const total = visibleTasks.length;
-
-        // Check if section build is finished
-        const isBuilt = pending === 0 || (pending <= Math.max(1, Math.floor(total * 0.05)) && this.sectionTimer >= 1.5 / spd);
-        const timeoutReached = this.sectionTimer >= 8.5 / spd;
-
-        if (isBuilt || timeoutReached) {
-          this.sectionDwell += dt;
-          // Hold for a moment to appreciate the completed section before scrolling
-          if (this.sectionDwell >= 0.6 / spd) {
-            if (this.currentSectionIdx + 1 < this.sectionTargets.length) {
-              // Smooth transition to next section
-              this.sectionState = 'SCROLLING';
-              this.scrollFromY = g.sy;
-              this.scrollToY = this.sectionTargets[this.currentSectionIdx + 1];
-              this.sectionTimer = 0;
-              this.sectionDwell = 0;
-            } else {
-              // Final section reached; wait for remaining tasks and complete
-              const allDone = E.tasks.every((t) => t.state === "done");
-              if (allDone || this.sectionTimer >= 2.5 / spd) {
-                if (!this.complete) {
-                  E.flocking = true;
-                  this.onComplete();
-                }
-              }
-            }
-          }
-        }
-      } else if (this.sectionState === 'SCROLLING') {
-        // Equal, smooth scroll duration for every section transition
-        this.sectionTimer += dt;
-        const dur = Math.max(0.8, this.scrollDuration / spd);
-        const p = Math.min(1, this.sectionTimer / dur);
-        // Smooth easeInOut cubic curve
-        const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-        const nextY = Math.round(this.scrollFromY + (this.scrollToY - this.scrollFromY) * ease);
-        this.env.scrollTo(nextY);
-
-        // Keep cursors active while transitioning between sections
-        for (const c of E.cursors) {
-          c.idleFor = 0;
-        }
-
-        if (p >= 1) {
-          this.env.scrollTo(this.scrollToY);
-          this.currentSectionIdx++;
-          this.sectionState = 'BUILDING';
-          this.sectionTimer = 0;
-          this.sectionDwell = 0;
-        }
+      const crew = Math.max(MIN_AGENTS, E.cursors.filter((c) => !c.leaving).length);
+      const backlog = E.backlog();
+      const target = backlog <= Math.max(4, crew * 0.6) ? 230 : backlog <= crew * 1.5 ? 80 : 0;
+      this.tourV += (target - this.tourV) * Math.min(1, dt * 2.5);
+      this.tourAcc += this.tourV * dt;
+      if (this.tourAcc >= 1) {
+        const d = Math.floor(this.tourAcc);
+        this.tourAcc -= d;
+        this.env.scrollBy(d);
       }
     }
 

@@ -1,0 +1,105 @@
+/* Swarm Multiplayer Cursors — Companion Styles & Claymorphic Controls */
+
+/* Floating Control Pill (Claymorphic) */
+.swarm-control-pill {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2147483647 !important;
+  pointer-events: auto !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 10px;
+  background: #202020;
+  color: #FFFFFF;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.4),
+    0 4px 6px -2px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.35);
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  user-select: none;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: translateY(0);
+}
+
+.swarm-control-pill:hover {
+  transform: translateY(-2px);
+  background: #262626;
+  border-color: rgba(185, 243, 106, 0.4);
+  box-shadow: 
+    0 14px 28px -4px rgba(0, 0, 0, 0.5),
+    0 6px 10px -2px rgba(0, 0, 0, 0.3),
+    0 0 12px rgba(185, 243, 106, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.swarm-control-pill:active {
+  transform: translateY(1px);
+  box-shadow: 
+    0 4px 10px -2px rgba(0, 0, 0, 0.3),
+    inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.swarm-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #B9F36A;
+  box-shadow: 0 0 8px #B9F36A;
+  animation: swarmDotPulse 2s infinite ease-in-out;
+}
+
+@keyframes swarmDotPulse {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+    box-shadow: 0 0 12px #B9F36A;
+  }
+}
+
+.swarm-badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: rgba(185, 243, 106, 0.15);
+  color: #B9F36A;
+  font-size: 10px;
+  font-family: monospace;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+/* Accessibility: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .swarm-pulse-dot {
+    animation: none;
+  }
+  .swarm-control-pill {
+    transition: none;
+    transform: none !important;
+  }
+}
+
+/* Responsive Support */
+@media (max-width: 640px) {
+  .swarm-control-pill {
+    bottom: 16px;
+    right: 16px;
+    padding: 5px 10px 5px 8px;
+    font-size: 11px;
+  }
+}

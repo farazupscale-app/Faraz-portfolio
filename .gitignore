@@ -35,4 +35,3 @@ next-env.d.ts
 # scratch & submodules
 /scratch/
 /swarm-extension-repo/
-*.mp4
