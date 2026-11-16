@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+const DEFAULT_SCRIPT_URL =
+  'https://script.google.com/macros/s/AKfycby_VZRkYhMNVguv8wqQ5qGxxwAqbXLwhoRomqeZXoEnoMi67JsW_P2YW3xb9efSmjuJ/exec';
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -27,7 +30,8 @@ export async function POST(request) {
 
     const scriptUrl =
       process.env.GOOGLE_SHEETS_SCRIPT_URL ||
-      process.env.NEXT_PUBLIC_GOOGLE_SHEETS_SCRIPT_URL;
+      process.env.NEXT_PUBLIC_GOOGLE_SHEETS_SCRIPT_URL ||
+      DEFAULT_SCRIPT_URL;
 
     if (!scriptUrl) {
       return NextResponse.json(
